@@ -9,52 +9,67 @@ TOKEN = '1636613930:AAFSFWtN1wb9ueDP4lZKhLfle8f_IGOOzd4'
 bot = telegram.Bot(token=TOKEN)
 
 def proccess(data):
-    user =  user_handler(data)
-    login(user, data)
+
+        if "contact" in data['message']:
+            msg = msg_handler(data)
+            create_user(msg)
+
+        else:
+            msg =  msg_handler(data)
+            login(msg)
 
 
-def user_handler(data):
+def msg_handler(data):
 
-        user_id = data['message']['from']['id']
-        first_name = data['message']['from']['first_name']
-        last_name = data['message']['from']['last_name']
+            user_id = data['message']['from']['id']
+            first_name = data['message']['from']['first_name']
+            last_name = data['message']['from']['last_name']
 
-        user = {
-            'user_id':user_id,
-            'first_name':first_name,
-            'last_name':last_name,
-        }
+            msg = {
+                'user_id':user_id,
+                'first_name':first_name,
+                'last_name':last_name,
+            }
 
-        return user
+            if 'contact' in data['message']:
+                msg['phone_number'] = data['message']['contact']['phone_number']
 
-def login(user, data):
+            return msg
+
+def msg_login(msg):
 
     reply_markup = telegram.ReplyKeyboardMarkup(
-        [[telegram.KeyboardButton("Click para Login", request_contact=True)]],
+        [[telegram.KeyboardButton("Compartilhar número de telefone", request_contact=True)]],
         resize_keyboard=True,
         one_time_keyboard=True,
     )
     bot.sendMessage(
-        user["user_id"], "Preciso autorizar seu acesso.", reply_markup=reply_markup
+        msg['user_id'], "Por favor, compartilhe o seu número de telefone para fazer o seu cadastro na base de dados", reply_markup=reply_markup
     )
 
-    user["phone_number"] = data['message']['contact']['phone_number']
+def login(msg):
 
-    if user['phone_number']:
-         Contact(
-                        user_id=user["user_id"],
-                        first_name=user["first_name"],
-                        last_name=user["last_name"],
-                        phone_number=user["phone_number"],
-                    ).save()
+    try:
+        contact = Contact.objects.get(user_id=msg['user_id'])
+
+        text = 'Seja bem-vindo {0} {1}'.format(msg['first_name'], msg['last_name'])
+        bot.sendMessage(msg['user_id'], text)
+
+    except Contact.DoesNotExist:
+
+        msg_login(msg)
 
 
 
-# def send_message(text, chat_id):
-#     url = 'https://api.telegram.org/bot{0}/sendMessage'.format(TOKEN)
-#     data = {'chat_id':chat_id, 'text':text}
-#     response = requests.post(url, data=data)
-#     print(response.content)
-#
-#
-#
+def create_user(msg):
+
+
+        Contact(
+                    user_id=msg["user_id"],
+                    first_name=msg["first_name"],
+                    last_name=msg["last_name"],
+                    phone_number=msg["phone_number"],
+                ).save()
+
+        text = 'Usuário criado com sucesso'
+        bot.sendMessage(msg['user_id'], text)
