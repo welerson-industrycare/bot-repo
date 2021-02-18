@@ -25,7 +25,7 @@ SECRET_KEY = '%-zys%7e23neli&&dn0&+a-49(ti@=lnkdi7sxjfs5v=s5+)#+'
 # SECURITY WARNING: don't run with debug turned on in production!
 DEBUG = True
 
-ALLOWED_HOSTS = ['b0cf9acb3832.ngrok.io']
+ALLOWED_HOSTS = ['a6f86d2842c9.ngrok.io']
 
 
 # Application definition
@@ -76,8 +76,11 @@ WSGI_APPLICATION = 'chatbot.wsgi.application'
 
 DATABASES = {
     'default': {
-        'ENGINE': 'django.db.backends.sqlite3',
-        'NAME': BASE_DIR / 'db.sqlite3',
+        'ENGINE': 'django.db.backends.postgresql',
+        'NAME': 'botdb',
+        'USER': 'postgres',
+        'PASSWORD': 'postgres',
+        'HOST': 'localhost',
     }
 }
 
