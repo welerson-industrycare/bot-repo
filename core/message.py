@@ -1,7 +1,8 @@
 import requests
 import telegram
+import logging
 from telegram import InlineKeyboardMarkup, InlineKeyboardButton
-from core.models import Contact, ChatHeader, ChatBody
+from core.models import Contact, BotHeader, BotContent
 import json
 from django.db import connections
 import re
@@ -10,10 +11,16 @@ import matplotlib.pyplot as plt
 from io import BytesIO
 from PIL import Image
 import io
+from chatbot.settings import TELEGRAM_TOKEN, BOT_URL
+from common.multiservice_integrator import *
 
-TOKEN = '1636613930:AAFSFWtN1wb9ueDP4lZKhLfle8f_IGOOzd4'
 
-bot = telegram.Bot(token=TOKEN)
+# logging.basicConfig(format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
+#                     level=logging.INFO)
+
+# logger = logging.getLogger(__name__)
+bot = telegram.Bot(token=TELEGRAM_TOKEN)
+URL = BOT_URL.format(TELEGRAM_TOKEN)
 
 
 def proccess(data):
@@ -22,7 +29,11 @@ def proccess(data):
     Function that receive a json request "data"
     """
 
-    if 'entities' in data['message']:
+    if "contact" in data['message']:
+        msg = msg_handler(data)
+        create_user(msg)
+
+    elif 'entities' in data['message']:
        
         command = data['message']['text']
         
@@ -37,14 +48,11 @@ def proccess(data):
             
           make_table(cmd, data)
 
-      
-    elif "contact" in data['message']:
-        msg = msg_handler(data)
-        create_user(msg)
-
     else:
         msg = msg_handler(data)
         login(msg)
+
+        
 
 def make_table(cmd, data):
 
@@ -53,7 +61,7 @@ def make_table(cmd, data):
     user_id = data['message']['from']['id']
     label_x = 'num'
     label_y = 'py'
-    header_title = ChatHeader.objects.get(id=cmd)
+    header_title = BotHeader.objects.get(id=cmd)
     title_h = header_title.description.replace(' ', '_')
 
     graph_config = {
@@ -76,7 +84,6 @@ def make_plot(report, graph_config):
    
     
     return buf
-
 
 def cmd_formatter(string, replacements, ignore_case=False):
 
@@ -109,25 +116,23 @@ def callback(cmd):
     """
 
     try:
-        cmd_name = ChatHeader.objects.get(name=cmd)
+        cmd_name = BotHeader.objects.get(name=cmd)
         return cmd_name.id
     except:
        return False
-    
 
 def query_handler(cmd_id):
 
     """
     Receive a command id as parameter and return sql query related with the specif command
     """
-    query = ChatBody.objects.get(header_id=cmd_id)
+    query = BotContent.objects.get(header_id=cmd_id)
     cur = connections['default'].cursor()
     cur.execute(query.sql)
     report = cur.fetchall()
     cur.close()
 
     return report
-
 
 def msg_handler(data):
 
@@ -150,7 +155,6 @@ def msg_handler(data):
 
     return msg
 
-
 def msg_login(msg):
 
     """
@@ -166,7 +170,6 @@ def msg_login(msg):
         msg['user_id'], "Por favor, compartilhe o seu número de telefone \U0001F4DE	 para efetuar o seu cadastro", reply_markup=reply_markup
     )
 
-
 def login(msg):
 
     """
@@ -174,30 +177,54 @@ def login(msg):
 
     try:
         contact = Contact.objects.get(user_id=msg['user_id'])
-        chat_header = ['\U0001F537/%s: %s' % (c.name.replace(' ', '_'), c.description)
-                       for c in ChatHeader.objects.filter(Q(user_id=contact.id)|Q(user_id__isnull=True))]
-        formated = str.join('\n', chat_header)
+        
+        if contact:
+            
+            return
+        # chat_header = ['\U0001F537/%s: %s' % (c.name.replace(' ', '_'), c.description)
+        #                for c in Contact.objects.filter(Q(user_id=contact.user_id)|Q(user_id__isnull=True))]
+        # formated = str.join('\n', chat_header)
         # text_header = 'Comandos disponíveis'
-        text = '***Comandos disponíveis***\n\n' + formated
+        # text = '***Comandos disponíveis***\n\n' + formated
         bot.sendMessage(msg['user_id'], text)
 
     except Contact.DoesNotExist:
 
         msg_login(msg)
 
+def verify_alerty_occurrencies(msg):
+    
+    return
 
 def create_user(msg):
-
     """
     Create a user in botdb
     """
+    orm = virtual_orm()
 
-    Contact(
-        user_id=msg["user_id"],
-        first_name=msg["first_name"],
-        last_name=msg["last_name"],
-        phone_number=msg["phone_number"],
-    ).save()
+    if 'accounts_user' in orm:
+        user = [ u for u in orm['accounts_user'] if u['phone_number'] == msg['phone_number']]
+        if len(user) > 0:
+            contact = Contact(
+                user_id=msg["user_id"],
+                contact_id=user[0]["id"],
+                first_name=msg["first_name"],
+                last_name=msg["last_name"],
+                phone_number=msg["phone_number"],
+                )
+            try:
+                contact.save(using='default')
+                text = 'Seja bem-vindo {} {}, você foi cadastrado na lista de alertas do seu sistema IndustryCare \U0001F642'.format(msg['first_name'], msg['last_name'])
+                bot.sendMessage(msg['user_id'], text)
+            
+            except Exception as e:
+                print('Ocorreu um erro', e)
+            
+        else:
+            bot.sendMessage(msg['user_id'], 'Sinto muito, mas este telefone não foi identificado em nossa base de dados.')
+    else:
+        bot.sendMessage(msg['user_id'], 'Sinto muito, mas este telefone não foi identificado em nossa base de dados.')
+    
 
-    text = 'Seja bem-vindo {} {} \U0001F642'.format(msg['first_name'], msg['last_name'])
-    bot.sendMessage(msg['user_id'], text)
+    
+    
